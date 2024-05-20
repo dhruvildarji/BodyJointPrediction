@@ -5,13 +5,14 @@ import wexpect
 
 # Define the directory containing the JSON files and the output directory for the videos
 json_dir = "D:/git/annotations/annotations/ego_pose/train/camera_pose"
+task_name = "basketball"
+output_dir = f"D:/git/annotations/basketball"
 
-
-# Function to extract uid and check if the take_name contains "basketball"
-def extract_uid_if_basketball(json_file):
+# Function to extract uid and check if the take_name contains tasks
+def extract_uid_if_task_name(json_file):
     with open(json_file, 'r') as file:
         data = json.load(file)
-        if 'basketball' in data['metadata']['take_name']:
+        if task_name in data['metadata']['take_name']:
             return data['metadata']['take_uid']
     return None
 
@@ -37,9 +38,9 @@ for json_filename in os.listdir(json_dir):
         json_file_path = os.path.join(json_dir, json_filename)
         
         # Extract uid from the current JSON file
-        uid = extract_uid_if_basketball(json_file_path)
+        uid = extract_uid_if_task_name(json_file_path)
 
-        output_dir = f"D:/git/annotations/basketball/{uid}"
+        output_dir = f"{output_dir}/{uid}"
         # Download the ego video using the extracted uid
         if uid != None:
             download_ego_video(uid, output_dir, c)
