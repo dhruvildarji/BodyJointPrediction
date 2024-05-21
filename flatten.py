@@ -1,86 +1,138 @@
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
+import os
+import json
+import glob
+from pathlib2 import Path
+from utils.DataLoader import HandPoseDataLoader
 
-# Define a function to read the frames from a video
-def read_video_frames(video_path):
-    cap = cv2.VideoCapture(video_path)
-    frames = []
+root_dir = "/mnt/d/git/dataset/handPose"
+
+loader = HandPoseDataLoader(root_dir)
+
+def create_output_folder(output_path):
+    if not os.path.exists(Path(output_path).parent):
+        os.makedirs(Path(output_path).parent)
+        print(f"Created directory: {output_path}")
+    else:
+        print(f"Directory already exists: {output_path}")
+
+
+def distort_image(image, intrinsics, distortion_coefficients):
+    """
+    Distort an undistorted image using the provided camera intrinsics and distortion coefficients.
+
+    :param image: The undistorted input image
+    :param intrinsics: Camera intrinsics matrix (3x3)
+    :param distortion_coefficients: Distortion coefficients
+    :return: The distorted output image
+    """
+    h, w = image.shape[:2]
+
+    # Generate a grid of coordinates corresponding to the undistorted image
+    map1, map2 = cv2.initUndistortRectifyMap(
+        intrinsics, distortion_coefficients, None, intrinsics, (w, h), cv2.CV_32FC1
+    )
+
+    # Apply the inverse mapping to get the distorted image
+    distorted_image = cv2.remap(image, map1, map2, interpolation=cv2.INTER_LINEAR)
+
+    return distorted_image
+
+
+def unwarp_image(image, intrinsics, distortion_coefficients):
+    """
+    Unwarp a round-shaped (fisheye) image to a square image using the provided camera intrinsics and distortion coefficients.
+
+    :param image: The round-shaped input image
+    :param intrinsics: Camera intrinsics matrix (3x3)
+    :param distortion_coefficients: Distortion coefficients
+    :return: The unwarped output image
+    """
+    h, w = image.shape[:2]
+    new_camera_matrix, roi = cv2.getOptimalNewCameraMatrix(intrinsics, distortion_coefficients, (w, h), 1, (w, h))
+    
+    # Undistort the image
+    unwarped_image = cv2.undistort(image, intrinsics, distortion_coefficients, None, new_camera_matrix)
+    
+    # Crop the image based on the ROI (Region of Interest)
+    # x, y, w, h = roi
+    # unwarped_image = unwarped_image[y:y+h, x:x+w]
+    
+    return unwarped_image
+
+for item in loader:
+    distortion_coefficients = np.zeros((4, 1))  # Assuming no lens distortion
+    
+    camera_intrinsics = np.array(item["intrinsics"])
+    # distortion_coefficients = np.array(item["distortion"])
+    video_file = item["video_file"]
+    # print(camera_intrinsics)
+    # print(video_file)
+    cap = cv2.VideoCapture(video_file)
+    # Get video properties
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    output_video_path  = f"{Path(video_file).parent}/out/unwraped.mp4"
+    create_output_folder(output_video_path)
+    # Define the codec and create VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_video_path, fourcc, fps, (frame_width, frame_height))
+    print(output_video_path)
+
+    # Undistort each frame
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
-        frames.append(frame)
-    cap.release()
-    return frames
 
-# Define a function to write frames to a video
-def write_video_frames(frames, output_path, fps=20.0):
-    h, w = frames[0].shape[:2]
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
-    for frame in frames:
-        out.write(frame)
+        unwarped_frame = unwarp_image(frame, camera_intrinsics, distortion_coefficients)
+
+        # Undistort the frame
+        # undistorted_frame = cv2.undistort(frame, camera_intrinsics, distortion_coefficients)
+
+        # Write the undistorted frame to the output video
+        out.write(unwarped_frame)
+
+    # Release everything
+    cap.release()
     out.release()
 
-# Define a function to flatten the image
-def flatten_image(frame, intrinsics, extrinsics):
-    h, w = frame.shape[:2]
-    intrinsic_matrix = np.array(intrinsics)
+    print(f"Undistorted video saved at {output_video_path}")
+
+# # Camera parameters
+# camera_intrinsics = np.array([[150.0, 0.0, 255.5], [0.0, 150.0, 255.5], [0.0, 0.0, 1.0]])
+# distortion_coefficients = np.zeros((4, 1))  # Assuming no lens distortion
+
+# # Open the video file
+# input_video_path = '/mnt/d/git/annotations/Piano/9baa6a3d-0767-45d6-923a-fd4e85a69911/takes/iiith_piano_001_4/frame_aligned_videos/aria01_214-1.mp4'
+# output_video_path = '/mnt/d/git/annotations/Piano/9baa6a3d-0767-45d6-923a-fd4e85a69911/takes/iiith_piano_001_4/frame_aligned_videos/undistorted_aria01_214-1.mp4'
+
+
+# # Get video properties
+# frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+# frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+# fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+# # Define the codec and create VideoWriter object
+# fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+# out = cv2.VideoWriter(output_video_path, fourcc, fps, (frame_width, frame_height))
+
+# # Undistort each frame
+# while cap.isOpened():
+#     ret, frame = cap.read()
+#     if not ret:
+#         break
     
-    # Convert extrinsics to 3x3 (rotation) and translation vector
-    rotation_matrix = np.array([extrinsics[i][:3] for i in range(3)])
-    translation_vector = np.array([extrinsics[i][3] for i in range(3)]).reshape((3, 1))
+#     # Undistort the frame
+#     undistorted_frame = cv2.undistort(frame, camera_intrinsics, distortion_coefficients)
 
-    # Combine rotation and translation into a single 3x4 matrix
-    extrinsic_matrix = np.hstack((rotation_matrix, translation_vector))
+#     # Write the undistorted frame to the output video
+#     out.write(undistorted_frame)
 
-    # Construct the homography matrix (3x3) from the intrinsic and extrinsic parameters
-    homography_matrix = intrinsic_matrix @ np.hstack((rotation_matrix, translation_vector))[:, :3]
+# # Release everything
+# cap.release()
+# out.release()
 
-    # Normalize the homography matrix
-    homography_matrix /= homography_matrix[2, 2]
-
-    # Print matrices for debugging
-    print("Intrinsic Matrix:\n", intrinsic_matrix)
-    print("Rotation Matrix:\n", rotation_matrix)
-    print("Translation Vector:\n", translation_vector)
-    print("Homography Matrix:\n", homography_matrix)
-
-    # Apply the transformation
-    flattened_frame = cv2.warpPerspective(frame, homography_matrix, (w, h))
-
-    return flattened_frame
-
-# Camera parameters
-intrinsics = [[150.0, 0.0, 255.5], [0.0, 150.0, 255.5], [0.0, 0.0, 1.0]]
-extrinsics = [[0.25332655304165963, -0.16657374284029, -0.9529317117262677, 0.984832189787714],
-              [0.38694833037292553, 0.920275535674013, -0.05799938575489, 0.6950308525824895],
-              [0.8866209159267855, -0.3540425494132491, 0.2975856609614858, 2.385611958598334]]
-
-# Paths
-input_video_path = "/mnt/d/git/annotations/basketball/0a6f112f-6cd8-4c53-adda-0d7862804b87/takes/unc_basketball_02-24-23_01_27/frame_aligned_videos/aria01_214-1.mp4"
-output_video_path = "/mnt/d/git/annotations/basketball/0a6f112f-6cd8-4c53-adda-0d7862804b87/takes/unc_basketball_02-24-23_01_27/flattened_aria01_214-1.mp4"
-
-# Read frames from the original video
-original_frames = read_video_frames(input_video_path)
-
-# Flatten each frame and visualize
-flattened_frames = []
-for i, frame in enumerate(original_frames):
-    flattened_frame = flatten_image(frame, intrinsics, extrinsics)
-    flattened_frames.append(flattened_frame)
-    
-    # Visualize the original and flattened frame
-    if i < 5:  # Show the first 5 frames for inspection
-        plt.figure(figsize=(10, 5))
-        plt.subplot(1, 2, 1)
-        plt.imshow(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        plt.title('Original Frame')
-        plt.subplot(1, 2, 2)
-        plt.imshow(cv2.cvtColor(flattened_frame, cv2.COLOR_BGR2RGB))
-        plt.title('Flattened Frame')
-        plt.show()
-
-# Write the flattened frames to a new video
-write_video_frames(flattened_frames, output_video_path)
+# print(f"Undistorted video saved at {output_video_path}")
