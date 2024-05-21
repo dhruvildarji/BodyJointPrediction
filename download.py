@@ -5,21 +5,21 @@ import wexpect
 
 # Define the directory containing the JSON files and the output directory for the videos
 json_dir = "D:/git/annotations/annotations/ego_pose/train/camera_pose"
-task_name = "basketball"
-output_dir = f"D:/git/annotations/basketball"
+task_name = "Piano"
+output_dir = f"D:/git/annotations/Piano"
 
 # Function to extract uid and check if the take_name contains tasks
 def extract_uid_if_task_name(json_file):
     with open(json_file, 'r') as file:
         data = json.load(file)
-        if task_name in data['metadata']['take_name']:
+        if task_name in data['metadata']['take_name'] or "piano" in data['metadata']['take_name']:
             return data['metadata']['take_uid']
     return None
 
 # Function to run the egoexo command with the extracted uid, defaulting the confirmation to "yes"
-def download_ego_video(uid, output_dir, c):
+def download_ego_video(uid, output_dir_, c):
     # command = f"echo y | egoexo -o {output_dir} --uids {uid} --parts takes --views ego"
-    command = f"egoexo -o {output_dir} --uids {uid} --parts takes --views ego"
+    command = f"egoexo -o {output_dir_} --uids {uid} --parts takes --views ego"
     print(command)
     print(f"download video {c}")    
     process = subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -40,10 +40,10 @@ for json_filename in os.listdir(json_dir):
         # Extract uid from the current JSON file
         uid = extract_uid_if_task_name(json_file_path)
 
-        output_dir = f"{output_dir}/{uid}"
+        output_dir_ = f"{output_dir}/{uid}"
         # Download the ego video using the extracted uid
         if uid != None:
-            download_ego_video(uid, output_dir, c)
+            download_ego_video(uid, output_dir_, c)
             c = c + 1
 
 print(f"All videos have been downloaded. total videos downloaded{c}")
