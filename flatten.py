@@ -88,6 +88,7 @@ for item in loader:
             break
 
         unwarped_frame = unwarp_image(frame, camera_intrinsics, distortion_coefficients)
+        # distorted_frame = distort_image(frame, camera_intrinsics, distortion_coefficients)
 
         # Undistort the frame
         # undistorted_frame = cv2.undistort(frame, camera_intrinsics, distortion_coefficients)
