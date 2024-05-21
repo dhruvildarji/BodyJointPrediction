@@ -79,7 +79,6 @@ for item in loader:
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_video_path, fourcc, fps, (frame_width, frame_height))
-    print(output_video_path)
 
     # Undistort each frame
     while cap.isOpened():
@@ -87,6 +86,7 @@ for item in loader:
         if not ret:
             break
 
+        # unwrap the image
         unwarped_frame = unwarp_image(frame, camera_intrinsics, distortion_coefficients)
         # distorted_frame = distort_image(frame, camera_intrinsics, distortion_coefficients)
 
