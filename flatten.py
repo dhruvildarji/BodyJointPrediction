@@ -5,6 +5,7 @@ import json
 import glob
 from pathlib2 import Path
 from utils.DataLoader import HandPoseDataLoader
+import pickle
 
 root_dir = "/mnt/d/git/dataset/handPose"
 
@@ -61,46 +62,63 @@ def unwarp_image(image, intrinsics, distortion_coefficients):
     
     return unwarped_image
 
-for item in loader:
-    distortion_coefficients = np.zeros((4, 1))  # Assuming no lens distortion
+# pickle_file = "/mnt/d/git/dataset/handPose/data/data.pkl"
+
+# def load_data_from_pickle(file_path):
+#     with open(file_path, 'rb') as file:
+#         data = pickle.load(file)
+#     print(f"Data loaded from {file_path}")
+#     return data
+
+# data = load_data_from_pickle(pickle_file)
+# print(data.keys())
+# for take_name in data["take_name"]:
+#     if "frames" in data[take_name].keys():
+#         for frame in data[take_name]["frames"]:
+#             cv2.imshow("frame", frame)
+#             cv2.waitKey(1)
+
+# for item in loader:
+#     distortion_coefficients = np.zeros((4, 1))  # Assuming no lens distortion
     
-    camera_intrinsics = np.array(item["intrinsics"])
-    # distortion_coefficients = np.array(item["distortion"])
-    video_file = item["video_file"]
+#     camera_intrinsics = np.array(item["intrinsics"])
+#     # distortion_coefficients = np.array(item["distortion"])
+#     video_file = item["video_file"]
+#     print(len(item["hand_pose"]))
     # print(camera_intrinsics)
     # print(video_file)
-    cap = cv2.VideoCapture(video_file)
-    # Get video properties
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    output_video_path  = f"{Path(video_file).parent}/out/unwraped.mp4"
-    create_output_folder(output_video_path)
-    # Define the codec and create VideoWriter object
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (frame_width, frame_height))
+    # cap = cv2.VideoCapture(video_file)
+    # # Get video properties
+    # frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    # frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # fps = int(cap.get(cv2.CAP_PROP_FPS))
+    # output_video_path  = f"{Path(video_file).parent}/out/unwraped.mp4"
+    # create_output_folder(output_video_path)
+    # # Define the codec and create VideoWriter object
+    # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    # out = cv2.VideoWriter(output_video_path, fourcc, fps, (frame_width, frame_height))
 
-    # Undistort each frame
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    # # Undistort each frame
+    # while cap.isOpened():
+    #     ret, frame = cap.read()
+    #     if not ret:
+    #         break
 
-        # unwrap the image
-        unwarped_frame = unwarp_image(frame, camera_intrinsics, distortion_coefficients)
-        # distorted_frame = distort_image(frame, camera_intrinsics, distortion_coefficients)
+    #     # unwrap the image
+    #     # unwarped_frame = unwarp_image(frame, camera_intrinsics, distortion_coefficients)
+    #     # distorted_frame = distort_image(frame, camera_intrinsics, distortion_coefficients)
 
-        # Undistort the frame
-        # undistorted_frame = cv2.undistort(frame, camera_intrinsics, distortion_coefficients)
+    #     # Undistort the frame
+    #     # undistorted_frame = cv2.undistort(frame, camera_intrinsics, distortion_coefficients)
 
-        # Write the undistorted frame to the output video
-        out.write(unwarped_frame)
+    #     # Write the undistorted frame to the output video
+    #     # out.write(unwarped_frame)
 
-    # Release everything
-    cap.release()
-    out.release()
+    # # Release everything
+    # cap.release()
+    # out.release()
 
-    print(f"Undistorted video saved at {output_video_path}")
+    # print(f"Undistorted video saved at {output_video_path}")
 
 # # Camera parameters
 # camera_intrinsics = np.array([[150.0, 0.0, 255.5], [0.0, 150.0, 255.5], [0.0, 0.0, 1.0]])
