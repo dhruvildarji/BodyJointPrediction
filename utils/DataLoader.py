@@ -6,7 +6,7 @@ from pathlib2 import Path
 import pickle
 
 class HandPoseDataLoader:
-    def __init__(self, root_dir, data_type = "train"):
+    def __init__(self, root_dir, data_type = "train", use_pickle=False):
         self.root_dir = root_dir
         self.json_dir = f"{root_dir}/data/annotations/ego_pose/{data_type}/camera_pose"
         self.video_dir = f"{root_dir}/data/takes/"
@@ -22,9 +22,10 @@ class HandPoseDataLoader:
         self.current_index = 0
         self.video_dirs = []
         self.data_type = data_type
-        self.hand_data = self.load_hand_data()
-        self.init_videos()
-        self.save_file_pickle()
+        if not use_pickle:
+            self.hand_data = self.load_hand_data()
+            self.init_videos()
+            self.save_file_pickle()
 
     def convert_generators(self, obj):
         if isinstance(obj, dict):
@@ -55,6 +56,7 @@ class HandPoseDataLoader:
         files_ = {}
         for filename in video_files_:
             file_name_ = Path(filename).parent.parent.name
+
             if file_name_ in self.data["take_name"]:
                 if file_name_ not in self.video_files:
                     files_[file_name_] = filename
@@ -71,10 +73,28 @@ class HandPoseDataLoader:
             if files.endswith('.json'):
                 file = files.split(".")[0]
                 if file in self.data["take_uid"]:
-                    self.data[self.data[file]["take_name"]]["hand_pose"] = {}
+                    # self.data[self.data[file]["take_name"]]["hand_pose"] = {}
+                    int_ = self.get_int_from_dict("take_uid", file)
+                    self.data[int_]["hand_pose"] = {}
                     with open(f"{self.hand_pose_annotations}/{file}.json", 'r') as file_:
                         json_data = json.load(file_)
-                        self.data[self.data[file]["take_name"]]["hand_pose"] = json_data
+                        # self.data[self.data[file]["take_name"]]["hand_pose"] = json_data
+                        self.data[int_]["hand_pose"] = json_data
+
+    def get_int_from_dict(self, dictionary_key, target_string):
+        """
+        Check if the target_string is in the dictionary and return the corresponding integer.
+        If the string is not found, return None.
+        
+        :param dictionary: A dictionary with integer keys and string values.
+        :param target_string: The string to search for in the dictionary values.
+        :return: The integer key corresponding to the target string, or None if not found.
+        """
+        for key, value in self.data.items():
+            if dictionary_key in value:
+                if value[dictionary_key] == target_string:
+                    return key
+        return None
 
     def init_videos(self):
 
@@ -89,46 +109,63 @@ class HandPoseDataLoader:
             print("frames", total_frames)
             print("fps ", fps)
             print(" H , W ", frame_height, frame_width)
-            print("hand_pose length ", len(self.data[idx]["hand_pose"]))
-            print("hand_pose keys ", self.data[idx]["hand_pose"].keys())
+            # print("hand_pose length ", len(self.data[idx]["hand_pose"]))
+            # print("hand_pose keys ", self.data[idx]["hand_pose"].keys())
             c  = 0
-            self.data[idx]["frames"] = []
-            for frame_num in self.data[idx]["hand_pose"].keys():
+            # self.data[idx]["frames"] = []
+            int_ = self.get_int_from_dict("take_name", idx)
+            print(int_)
+            self.data[int_]["frames"] = []
+
+            for frame_num in self.data[int_]["hand_pose"].keys():
                 c = c + 1
                 cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_num))
                 ret, frame = cap.read()
                 if ret:
-                    self.data[idx]["frames"].append(frame)
+                    # self.data[idx]["frames"].append(frame)
+                    self.data[int_]["frames"].append(frame) 
+
+                if c == 25:
+                    break
             cap.release()
 
     def load_data(self):
         self.data["take_name"] = []
         self.data["take_uid"] = []
-        for file_path in self.json_files:
+        for idx,file_path in enumerate(self.json_files):
+            self.data[idx] = {}
+            self.data[idx]["cam_pose"] = []
             with open(file_path, 'r') as file:
                 json_data = json.load(file)
                 for frame_keys in json_data.keys():
                     if "metadata" in frame_keys:
                         take_name = json_data["metadata"]["take_name"]
                         take_uid = json_data["metadata"]["take_uid"]
-                        self.data[take_name] = {}
-                        self.data[take_uid] = {}
-                        self.data[take_name]["cam_pose"] = []
-                        self.data[take_name]["take_uid"] = {}
-                        self.data[take_uid]["take_name"] = {}
+                        # self.data[take_name] = {}
+                        # self.data[take_uid] = {}
+                        # self.data[take_name]["cam_pose"] = []
+                        # self.data[take_name]["take_uid"] = {}
+                        # self.data[take_uid]["take_name"] = {}
 
                         self.data["take_name"].append(json_data["metadata"]["take_name"])
                         self.data["take_uid"].append(json_data["metadata"]["take_uid"])
-                        self.data[take_name]["take_uid"] = json_data["metadata"]["take_uid"]
-                        self.data[take_uid]["take_name"] = json_data["metadata"]["take_name"]
+                        # self.data[take_name]["take_uid"] = json_data["metadata"]["take_uid"]
+                        # self.data[take_uid]["take_name"] = json_data["metadata"]["take_name"]
+                        self.data[idx]["take_uid"] = json_data["metadata"]["take_uid"]
+                        self.data[idx]["take_name"] = json_data["metadata"]["take_name"]
 
                     elif "aria" in frame_keys:                       
-                        self.data[take_name]["camera_intrinsics"] = json_data[frame_keys]["camera_intrinsics"]
-                        self.data[take_name]["cam_pose"].append(json_data[frame_keys][i] for i in json_data[frame_keys].keys() if i.isdigit())
+                        # self.data[take_name]["camera_intrinsics"] = json_data[frame_keys]["camera_intrinsics"]
+                        # self.data[take_name]["cam_pose"].append(json_data[frame_keys][i] for i in json_data[frame_keys].keys() if i.isdigit())
+                        self.data[idx]["camera_intrinsics"] = json_data[frame_keys]["camera_intrinsics"]
+                        self.data[idx]["cam_pose"].append(json_data[frame_keys][i] for i in json_data[frame_keys].keys() if i.isdigit())
                     else:
-                        self.data[take_name]["distortion"] = json_data[frame_keys]["distortion_coeffs"]
+                        # self.data[take_name]["distortion"] = json_data[frame_keys]["distortion_coeffs"]
+                        self.data[idx]["distortion"] = json_data[frame_keys]["distortion_coeffs"]
 
 
+    def get_frames(self, file_name):
+        self.frames = self.data[file_name]["frames"]
 
     def load_videos(self):
         self.video_files = self.find_videos_with_214()
@@ -141,17 +178,6 @@ class HandPoseDataLoader:
 
     def get_hand_poses(self, file_name):
         return self.data[file_name]["hand_pose"]
-
-    def get_frames(self, video_name, frame_id):
-        if video_name not in self.video_caps:
-            raise ValueError(f"Video {video_name} not found")
-        
-        cap = self.video_caps[video_name]
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
-        ret, frame = cap.read()
-        if not ret:
-            raise ValueError(f"Could not read frame {frame_id} from video {video_name}")
-        return frame
 
     def release(self):
         for cap in self.video_caps.values():
@@ -171,7 +197,8 @@ class HandPoseDataLoader:
                 "intrinsics": self.get_intrinsics(file_name),
                 "hand_pose": self.get_hand_poses(file_name),
                 "distortion": self.get_distortion(file_name),
-                "video_file" : self.video_files[file_name]
+                "video_file" : self.video_files[file_name],
+                "frames" : self.get_frames(file_name),             
             }
         else:
             raise StopIteration
