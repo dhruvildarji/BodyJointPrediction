@@ -1,0 +1,1 @@
+ python our_train.py --gt_anno_dir /mnt/d/git/dataset/handPose/out/annotation/manual  --aria_img_dir /mnt/d/git/dataset/handPose/out/image/undistorted --cfg_file /mnt/d/git/ego-exo4d-egopose/handpose/models/POTTER/configs/SAMPLE_MODEL.yaml
