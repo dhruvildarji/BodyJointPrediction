@@ -1,141 +1,86 @@
-import torch
+tr  import torch
+import torch.nn as nn
+import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from utils.DataLoader import HandPoseDataLoader
-import pickle
-import os
-import cv2
-import numpy as np
-from PIL import Image
-import torchvision.transforms as transforms
-import torch
+from BodyJointPrediction.dataloader import HandPoseDataLoader
+import torch.nn.functional as F
 
 class HandPoseDataset(Dataset):
-    def __init__(self, data_loader):
-        self.data_loader = data_loader
-        self.data = self.load_data_from_pickle_or_loader()
+    def __init__(self, hand_pose_loader):
+        self.data = []s
+        for item in hand_pose_loader:
+            frames = item['frames']
+            hand_poses = item['hand_pose']
+            if frames is not None and hand_poses is not None:
+                for frame, hand_pose in zip(frames, hand_poses.values()):
+                    self.data.append((frame, hand_pose))
 
-    def load_data_from_pickle_or_loader(self):
-        pickle_file_path = self.data_loader.pickle_file_path
-        print(pickle_file_path)
-        if os.path.exists(pickle_file_path):
-            with open(pickle_file_path, 'rb') as file:
-                data = pickle.load(file)
-            print("Data loaded from pickle file.")
-        else:
-            data = list(self.data_loader)  # Load all data into memory using data loader
-            with open(pickle_file_path, 'wb') as file:
-                pickle.dump(data, file)
-            print(f"Data saved to {pickle_file_path}.")
-        return data
-    
     def __len__(self):
         return len(self.data)
-    
+
     def __getitem__(self, idx):
-        if idx >= len(self.data):
-            raise IndexError(f"Index {idx} out of range for dataset with length {len(self.data)}")
+        frame, hand_pose = self.data[idx]
+        frame = torch.tensor(frame, dtype=torch.float32).permute(2, 0, 1) / 255.0  # Normalize and permute for channels
+        hand_pose = torch.tensor(hand_pose, dtype=torch.float32)
+        return frame, hand_pose
 
-        item = self.data[idx]
-        hand_pose = item['hand_pose']
-        
-        # Convert video frames and hand poses to tensors
-        frames = [torch.tensor(frame) for frame in item['frames']]
-        list1 = []
-        for i in hand_pose.keys():
-            hand_ = hand_pose[i]
-            hand_ = hand_[0]
-            for joints in hand_["annotation3D"]:
-                list_ = []
-                list_.append(hand_["annotation3D"][joints]["x"])
-                list_.append(hand_["annotation3D"][joints]["y"])
-                list_.append(hand_["annotation3D"][joints]["z"])
-                list1.append(list_)
-        
-        hand_pose = torch.tensor(list1)
-        
-        sample = {
-            'frames': frames,
-            'hand_pose': hand_pose,
-            'intrinsics': torch.tensor(item['camera_intrinsics']),
-            'distortion': torch.tensor(item['distortion'])
-        }
-        
-        return sample
+class SimpleCNN(nn.Module):
+    def __init__(self):
+        super(SimpleCNN, self).__init__()
+        self.conv1 = nn.Conv2d(3, 16, 3, padding=1)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(16, 32, 3, padding=1)
+        self.fc1 = nn.Linear(32 * 64 * 64, 512)
+        self.fc2 = nn.Linear(512, 21 * 3)
 
-# Initialize your HandPoseDataLoader
-root_dir = "/mnt/d/git/dataset/handPose"
-data_loader = HandPoseDataLoader(root_dir, data_type="train", use_pickle=True)
-# Create an instance of the custom Dataset
-dataset = HandPoseDataset(data_loader)
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(-1, 32 * 64 * 64)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x.view(-1, 21, 3)
 
-print(dataset.data.keys())
+def train_model(model, dataloader, criterion, optimizer, num_epochs=10):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    print(f"Training on {device}...")
 
-# Function to convert tensor to OpenCV image
-def tensor_to_cv2_image(tensor):
-    # Convert tensor to a numpy array and then to an OpenCV image
-    image = tensor.numpy().transpose(1, 2, 0)  # Change from (C, H, W) to (H, W, C)
-    image = (image * 255).astype(np.uint8)  # Scale to [0, 255] and convert to uint8
-    return cv2.cvtColor(image, cv2.COLOR_RGB2BGR)  # Convert from RGB to BGR
+    for epoch in range(num_epochs):
+        running_loss = 0.0
+        for i, data in enumerate(dataloader, 0):
+            inputs, labels = data
+            inputs, labels = inputs.to(device), labels.to(device)
 
-# Define the custom crop function
-def custom_crop(image):
-    width, height = image.size
-    
-    # Calculate the crop dimensions
-    top_crop = int(height * 0.25)  # 25% from top
-    left_crop = int(width * 0.05)  # 5% from left
-    right_crop = int(width * 0.95)  # 5% from right (keeping 95% width)
-    bottom_crop = height  # Keep bottom as it is
+            optimizer.zero_grad()
 
-    # Perform the crop
-    return image.crop((left_crop, top_crop, right_crop, bottom_crop))
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
+            running_loss += loss.item()
+            if i % 10 == 9:
+                print(f"[{epoch + 1}, {i + 1}] loss: {running_loss / 10:.3f}")
+                running_loss = 0.0
 
-for i in dataset:
-    for frame in i["frames"]:
-        # cv2.imshow("frame", np.array(frame))
-        # cv2.waitKey(1)
-        frame = np.array(frame)
+    print("Finished Training")
 
-        # Convert the image from BGR (OpenCV default) to RGB
-        cv2_image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+def main():
+    print("Initializing data loader...")
+    hand_pose_loader = HandPoseDataLoader("/Users/rdhara/Downloads/ego-exo4d-egopose/handpose/cs231project/dataset")
 
-        # Convert the OpenCV image to a PIL image
-        pil_image = Image.fromarray(cv2_image_rgb)
+    print("Creating dataset...")
+    dataset = HandPoseDataset(hand_pose_loader)
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=True, num_workers=4)
 
-        # Define the transformation pipeline with the custom crop
-        transform = transforms.Compose([
-            transforms.Lambda(custom_crop),  # Apply the custom crop
-            transforms.ToTensor(),           # Convert the cropped image to a tensor
-        ])
+    print("Initializing model...")
+    model = SimpleCNN()
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-        # Apply the transformation
-        transformed_image = transform(pil_image)
+    print("Starting training...")
+    train_model(model, dataloader, criterion, optimizer, num_epochs=10)
 
-        # Convert the first transformed corner crop to an OpenCV image
-        cv2_transformed_image = tensor_to_cv2_image(transformed_image)
-
-        # Display the image using OpenCV
-        cv2.imshow('Transformed Image', cv2_transformed_image)
-        k  = cv2.waitKey(0)  # Wait for a key press to close the image window
-        # if k == 27:
-        #     break
-    # break
-
-
-
-# Create a DataLoader instance
-# batch_size = 1
-# dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=1)
-# print(dataloader)
-# Iterate through the DataLoader
-# Debugging: Print the length of the dataset
-print(f"Length of dataset: {len(dataset)}")
-
-# Debugging: Iterate through the DataLoader with additional print statements
-# try:
-#     for batch_idx, batch in enumerate(dataloader):
-#         print(f"Processing batch {batch_idx}")
-#         # Your training code here
-# except Exception as e:
-#     print(f"An error occurred: {e}")
+if __name__ == "__main__":
+    main()
