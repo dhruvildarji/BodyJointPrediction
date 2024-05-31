@@ -2,7 +2,7 @@ import os
 import json
 import cv2
 import glob
-from pathlib2 import Path
+from pathlib import Path
 import pickle
 
 class HandPoseDataLoader:
@@ -12,7 +12,7 @@ class HandPoseDataLoader:
         self.video_dir = os.path.join(root_dir, "takes")
         self.hand_pose_annotations = os.path.join(root_dir, "annotations", "ego_pose", data_type, "hand", "annotation")
         self.hand_pose_automatics = os.path.join(root_dir, "annotations", "ego_pose", data_type, "hand", "automatics")
-        #self.pickle_file_path = os.path.join(root_dir, "data", "data.pkl")
+        # self.pickle_file_path = os.path.join(root_dir, "data", "data.pkl")
         self.json_files = self.find_json_files()
         self.data = {}
         self.load_data()
@@ -25,7 +25,10 @@ class HandPoseDataLoader:
         if not use_pickle:
             self.hand_data = self.load_hand_data()
             self.init_videos()
-            #self.save_file_pickle()
+            # self.save_file_pickle()
+
+    def __iter__(self):
+        return self
 
     def convert_generators(self, obj):
         if isinstance(obj, dict):
@@ -60,15 +63,13 @@ class HandPoseDataLoader:
             if file_name_ in self.data["take_name"]:
                 if file_name_ not in self.video_files:
                     files_[file_name_] = filename
-                
+
         return files_
-    
+
     def get_video_dir(self):
         self.video_dirs = os.listdir(self.video_dir)
 
-
     def load_hand_data(self):
-
         for files in os.listdir(self.hand_pose_annotations):
             if files.endswith('.json'):
                 file = files.split(".")[0]
@@ -87,14 +88,13 @@ class HandPoseDataLoader:
         return None
 
     def init_videos(self):
-
-        for idx,file_ in self.video_files.items():
+        for idx, file_ in self.video_files.items():
             cap = cv2.VideoCapture(file_)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
-            c  = 0
+            c = 0
             int_ = self.get_int_from_dict("take_name", idx)
             self.data[int_]["frames"] = []
 
@@ -103,7 +103,7 @@ class HandPoseDataLoader:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_num))
                 ret, frame = cap.read()
                 if ret:
-                    self.data[int_]["frames"].append(frame) 
+                    self.data[int_]["frames"].append(frame)
 
                 if c == 25:
                     break
@@ -112,62 +112,85 @@ class HandPoseDataLoader:
     def load_data(self):
         self.data["take_name"] = []
         self.data["take_uid"] = []
-        for idx,file_path in enumerate(self.json_files):
+        for idx, file_path in enumerate(self.json_files):
             self.data[idx] = {}
             self.data[idx]["cam_pose"] = []
             with open(file_path, 'r') as file:
                 json_data = json.load(file)
-                for frame_keys in json_data.keys():
-                    if "metadata" in frame_keys:
-                        take_name = json_data["metadata"]["take_name"]
-                        take_uid = json_data["metadata"]["take_uid"]
-                        self.data["take_name"].append(json_data["metadata"]["take_name"])
-                        self.data["take_uid"].append(json_data["metadata"]["take_uid"])
-                        self.data[idx]["take_uid"] = json_data["metadata"]["take_uid"]
-                        self.data[idx]["take_name"] = json_data["metadata"]["take_name"]
-
-                    elif "aria" in frame_keys:                       
-                        self.data[idx]["camera_intrinsics"] = json_data[frame_keys]["camera_intrinsics"]
-                        self.data[idx]["cam_pose"].append(json_data[frame_keys][i] for i in json_data[frame_keys].keys() if i.isdigit())
-                    else:
-                        self.data[idx]["distortion"] = json_data[frame_keys]["distortion_coeffs"]
-
-    def get_frames(self, file_name):
-        self.frames = self.data[file_name]["frames"]
 
     def load_videos(self):
         self.video_files = self.find_videos_with_214()
 
     def get_intrinsics(self, file_name):
-        return self.data[file_name]["camera_intrinsics"]
+        if file_name in self.data and "camera_intrinsics" in self.data[file_name]:
+            return self.data[file_name]["camera_intrinsics"]
+        else:
+            return None
     
     def get_distortion(self, file_name):
-        return self.data[file_name]["distortion"]
+        if file_name in self.data and "distortion" in self.data[file_name]:
+            return self.data[file_name]["distortion"]
+        else:
+            return None
 
     def get_hand_poses(self, file_name):
-        return self.data[file_name]["hand_pose"]
+        if file_name in self.data and "hand_pose" in self.data[file_name]:
+            return self.data[file_name]["hand_pose"]
+        else:
+            return None
 
     def release(self):
         for cap in self.video_caps.values():
             cap.release()
 
     def __iter__(self):
-        self.current_index = 0s
+        self.current_index = 0
+        return self
 
     def __next__(self):
-        if self.current_index < len(self.data["take_name"]):
+        while self.current_index < len(self.data["take_name"]):
             file_name = self.data["take_name"][self.current_index]
-            item = {
-                "type": self.data_type,
-                "file_name": file_name,
-                "intrinsics": self.get_intrinsics(file_name),
-                "hand_pose": self.get_hand_poses(file_name),
-                "distortion": self.get_distortion(file_name),
-                "video_file" : self.video_files[file_name],
-                "frames" : self.get_frames(file_name),             
-            }
-        else:
-            raise StopIteration
-        
-        self.current_index += 1
-        return items
+            intrinsics = self.get_intrinsics(file_name)
+            if intrinsics is not None:
+                item = {
+                    "type": self.data_type,
+                    "file_name": file_name,
+                    "intrinsics": intrinsics,
+                    "hand_pose": self.get_hand_poses(file_name),
+                    "distortion": self.get_distortion(file_name),
+                    "video_file": self.video_files[file_name],
+                    "frames": self.data[self.current_index]["frames"]
+                }
+                self.current_index += 1
+                return item
+            else:
+                print("Ignoring file without camera intrinsics:", file_name)
+                self.current_index += 1
+        raise StopIteration
+
+
+import torch
+from torch.utils.data import Dataset
+
+class HandPoseDataset(Dataset):
+    def __init__(self, hand_pose_loader):
+        self.data = []
+        for item in hand_pose_loader:
+            if item is not None and item.get("intrinsics") is not None:
+                frames = item['frames']
+                hand_poses = item['hand_pose']
+                if frames is not None and hand_poses is not None:
+                    for frame, hand_pose in zip(frames, hand_poses.values()):
+                        self.data.append((frame, hand_pose))
+            else:
+                print("Ignoring null item or missing camera intrinsics.")
+                print("File name:", item.get("file_name"))
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        frame, hand_pose = self.data[idx]
+        frame = torch.tensor(frame, dtype=torch.float32).permute(2, 0, 1) / 255.0  # Normalize and permute for channels
+        hand_pose = torch.tensor(hand_pose, dtype=torch.float32)
+        return frame, hand_pose
