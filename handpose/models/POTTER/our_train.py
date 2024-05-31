@@ -4,7 +4,7 @@ import torch
 import torchvision.transforms as transforms
 from dataset.ego4d_dataset import ego4dDataset
 # from models.PoolAttnHR_Pose_3D import load_pretrained_weights, PoolAttnHR_Pose_3D
-from models.sample_model import SimpleCNN
+from models.sample_model import SimpleCNN, SimpleCNNResNet
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from utils.functions import (
@@ -182,6 +182,7 @@ def main(args):
 
     ############ MODEL ###########
     model = SimpleCNN()
+    # model = SimpleCNNResNet()
 
     model = model.to(device)
 

@@ -3,6 +3,83 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
+from torchvision.models.resnet import BasicBlock
+
+class SimpleCNNResNet(nn.Module):
+    def __init__(self, num_joints=21, num_coords=3):
+        super(SimpleCNNResNet, self).__init__()
+        self.num_joints = num_joints
+        self.num_coords = num_coords
+
+        self.inplanes = 64
+
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn1 = nn.BatchNorm2d(self.inplanes)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        self.layer1 = self._make_layer(BasicBlock, 64, 3)
+        self.layer2 = self._make_layer(BasicBlock, 128, 4, stride=2)
+        self.layer3 = self._make_layer(BasicBlock, 256, 6, stride=2)
+        self.layer4 = self._make_layer(BasicBlock, 512, 3, stride=2)
+
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc1 = nn.Linear(512 * BasicBlock.expansion, 1024)
+        self.fc2 = nn.Linear(1024, num_joints * num_coords)
+
+        self.features = {}
+
+        self._register_hooks()
+
+    def _register_hooks(self):
+        def hook_fn(module, input, output, key):
+            self.features[key] = output.detach()
+
+        self.conv1.register_forward_hook(lambda m, i, o: hook_fn(m, i, o, 'conv1'))
+        self.layer1[0].conv1.register_forward_hook(lambda m, i, o: hook_fn(m, i, o, 'layer1_conv1'))
+        self.layer2[0].conv1.register_forward_hook(lambda m, i, o: hook_fn(m, i, o, 'layer2_conv1'))
+        self.layer3[0].conv1.register_forward_hook(lambda m, i, o: hook_fn(m, i, o, 'layer3_conv1'))
+        self.layer4[0].conv1.register_forward_hook(lambda m, i, o: hook_fn(m, i, o, 'layer4_conv1'))
+
+    def _make_layer(self, block, planes, blocks, stride=1):
+        downsample = None
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            downsample = nn.Sequential(
+                nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(planes * block.expansion),
+            )
+
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample))
+        self.inplanes = planes * block.expansion
+        for _ in range(1, blocks):
+            layers.append(block(self.inplanes, planes))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.relu(self.fc1(x))
+        x = self.fc2(x)
+
+        x = x.view(-1, self.num_joints, self.num_coords)  # Reshaping to [batch_size, num_joints, num_coords]
+        return x
+
+    def get_features(self):
+        return self.features
+
+
 # class SimpleCNN(nn.Module):
 #     def __init__(self, num_joints=21, num_coords=3):
 #         super(SimpleCNN, self).__init__()
@@ -109,8 +186,6 @@ class SimpleCNN(nn.Module):
         self.conv4.register_forward_hook(lambda m, i, o: hook_fn(m, i, o, 'conv4'))
     
     def forward(self, x):
-
-
 
         x = self.relu(self.bn1(self.conv1(x)))
         residual = self.res1(x)

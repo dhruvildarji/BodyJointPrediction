@@ -25,7 +25,6 @@ Perform inference on public un-annotated JSON test file, save model output as JS
 def main(args):
 
 
-
     torch.cuda.empty_cache()
     cfg = update_config(args.cfg_file)
     pretrained_hand_pose_CKPT = False

@@ -9,7 +9,7 @@ DATASET:
   - 512
   - 512
 MODEL:
-  NAME: 'Sample_Model'
+  NAME: 'Resnet'
   IMAGE_SIZE:
   - 224
   - 224
@@ -48,5 +48,5 @@ TRAIN:
   BATCH_SIZE: 16
   SHUFFLE: true
   BEGIN_EPOCH: 0
-  END_EPOCH: 80
+  END_EPOCH: 20
   LR: 0.0001

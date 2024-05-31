@@ -114,8 +114,8 @@ class ego4dDataset(Dataset):
             input = self.transform(input)
 
         # Return only input if split is test
-        if self.split == "val":
-            return input, curr_db["metadata"]
+        # if self.split == "val":
+        #     return input, curr_db["metadata"]
 
         # Load ground truth 3D hand joints and valid flag info for train and val, omit for test
         curr_3d_kpts_cam = curr_db["joints_3d"]
