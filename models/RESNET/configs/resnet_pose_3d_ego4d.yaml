@@ -1,0 +1,31 @@
+GPUS: '0'
+OUTPUT_DIR: 'output'
+LOG_DIR: 'log'
+WORKERS: 16
+TRAIN_PRINT_NUM: 6
+DATASET:
+  DATASET: 'ego4d'
+  ORIGINAL_IMAGE_SIZE:
+  - 512
+  - 512
+MODEL:
+  NAME: 'ResNetDirectRegressionPose'
+  IMAGE_SIZE:
+  - 224
+  - 224
+  NUM_JOINTS: 21
+  EXTRA:
+    DEPTH_DIM: 56
+TEST:
+  BATCH_SIZE: 128 
+TRAIN:
+  BATCH_SIZE: 128
+  SHUFFLE: true
+  BEGIN_EPOCH: 0
+  END_EPOCH: 30
+  LOSS: Pose3DLoss # Options: 'Pose3DLoss' (mse), L1Pose3DLoss (mae), L1Pose3DLossWithThresh (mae with threshold)
+  ERROR_THRESHOLD: 1 # (mm) Only used if LOSS is 'L1Pose3DLossWithThresh'
+  OPTIMIZER: 'adam'  # Options: 'adam', 'nag'
+  MOMENTUM: 0.9      # Only used if OPTIMIZER is 'nag
+  LR: 0.00001
+  WEIGHT_DECAY: 0.0
